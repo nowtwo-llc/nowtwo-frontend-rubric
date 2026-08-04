@@ -1,0 +1,173 @@
+/*
+ * Layout only.
+ *
+ * Colour, type and control styling deliberately come from the host page: the
+ * markup reuses the host's own classes (`dataList`, `input`, `button`,
+ * `inputGroup`) so the editor inherits whatever theme is in force. Everything
+ * here is the part the host cannot know about — the row geometry.
+ *
+ * Selectors are flat rather than nested so the file needs no preprocessor.
+ */
+
+.nt-rubric .criteria-container--empty,
+.nt-rubric .criteria-container--level-empty {
+    display: flex;
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    height: 150px;
+    text-align: center;
+}
+
+/* Fixed height with hidden overflow is what keeps every row the same size no
+   matter how many levels a criterion has; the scale scrolls sideways inside
+   it rather than growing the row. */
+.nt-rubric .criteria-container {
+    display: flex;
+    flex: 1;
+    flex-direction: row;
+    width: 100%;
+    min-width: 100%;
+    height: 225px;
+    min-height: 225px;
+    margin-top: 10px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.nt-rubric .criteria-container textarea {
+    resize: none;
+}
+
+.nt-rubric .criteria-container--drag-handle {
+    display: flex;
+    flex: 0 0 20px;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+}
+
+.nt-rubric .criteria-container--content {
+    display: flex;
+    flex: 0 0 240px;
+    height: 100%;
+    padding: 10px;
+    padding-left: 0;
+}
+
+.nt-rubric .criteria-container--content-inner {
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100%;
+}
+
+.nt-rubric .content-inner--description {
+    display: flex;
+    flex-grow: 1;
+    margin-top: 5px;
+}
+
+.nt-rubric .content-inner--description textarea {
+    height: 100%;
+    min-height: 100%;
+}
+
+.nt-rubric .criteria-container--level {
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100%;
+    padding-left: 0;
+    overflow: hidden;
+}
+
+.nt-rubric .criteria-container--level-inner {
+    display: flex;
+    flex-direction: row;
+    height: 160px;
+    min-height: 160px;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.nt-rubric .level-add-handler-container {
+    align-content: center;
+    justify-content: center;
+    width: 75px;
+    min-width: 75px;
+    height: 100%;
+    min-height: 100%;
+    text-align: center;
+}
+
+.nt-rubric .criteria-container--level-item {
+    display: flex;
+    flex-direction: column;
+    width: 200px;
+    min-width: 200px;
+    height: 100%;
+    padding: 10px;
+    padding-left: 0;
+}
+
+.nt-rubric .level-inner--description {
+    flex-grow: 1;
+    padding-top: 5px;
+}
+
+.nt-rubric .level-inner--description textarea {
+    height: 100%;
+}
+
+.nt-rubric .criteria-container--standards {
+    display: flex;
+    flex-direction: row;
+    height: 65px;
+    min-height: 65px;
+    padding: 10px;
+}
+
+.nt-rubric .criteria-container--standards-label {
+    flex: 0 0 150px;
+}
+
+.nt-rubric .selected-standard {
+    display: flex;
+    width: 300px;
+    margin-left: 5px;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.nt-rubric .enhanced-number {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.nt-rubric .selected-standard a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nt-rubric .criteria-container--points {
+    display: flex;
+    flex: 0 0 90px;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 100%;
+    font-size: 24px;
+    font-weight: 400;
+}
+
+.nt-rubric .rubric-footer-container {
+    padding-right: 6px;
+    font-size: 20px;
+    line-height: 40px;
+}
