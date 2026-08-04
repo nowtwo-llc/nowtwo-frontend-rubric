@@ -247,7 +247,7 @@ describe('RubricState', () => {
     });
 
     describe('text fields', () => {
-        it('writes name and description without reporting a change', () => {
+        it('writes name and description, reporting them as render-free text changes', () => {
             const state = stateWith();
             state.setName(0, 'Updated');
             state.setDescription(0, 'Updated description');
@@ -256,9 +256,11 @@ describe('RubricState', () => {
             expect(state.at(0)?.name).to.equal('Updated');
             expect(state.at(0)?.description).to.equal('Updated description');
             expect(state.at(0)?.levels[0].description).to.equal('Level description');
-            // Text edits are already visible in the DOM the user typed into;
-            // re-rendering for them would move the caret.
-            expect(changes).to.deep.equal([]);
+
+            // Reported so hosts listening via onChange hear every edit, but
+            // typed 'text' so the view renders nothing — the DOM already shows
+            // what was typed, and re-rendering would move the caret.
+            expect(changes).to.deep.equal([{ type: 'text' }, { type: 'text' }, { type: 'text' }]);
         });
 
         it('ignores writes to a missing criterion', () => {

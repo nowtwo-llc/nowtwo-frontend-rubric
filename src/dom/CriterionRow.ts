@@ -1,8 +1,18 @@
 import type { Criterion, HostBridge, Level, Standard } from '../types';
-import { clear, el, html, preserveFocus } from './element';
+import { clear, el, hiddenLabel, hostMarkup, preserveFocus, uniqueId, VISUALLY_HIDDEN_CLASS } from './element';
 import { criterionFields, levelFields, standardIdsField, standardTooltipId } from './fieldNames';
 
 export const DRAG_HANDLE_CLASS = 'criteria-container--drag-handle';
+
+/** Where a keyboard reorder wants to send the row. */
+export type MoveIntent = 'up' | 'down' | 'first' | 'last';
+
+const KEY_MOVES: Record<string, MoveIntent | undefined> = {
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+    Home: 'first',
+    End: 'last'
+};
 
 export interface CriterionRowCallbacks {
     onRemove(): void;
@@ -14,6 +24,7 @@ export interface CriterionRowCallbacks {
     onLevelDescriptionInput(levelIndex: number, value: string): void;
     onAddStandard(): void;
     onRemoveStandard(standardId: number | string): void;
+    onMove(intent: MoveIntent): void;
 }
 
 export interface CriterionRowConfig {
@@ -60,6 +71,12 @@ export class CriterionRow {
 
     private readonly descriptionField: HTMLTextAreaElement;
 
+    private readonly nameId: string;
+
+    private readonly descriptionId: string;
+
+    private readonly dragHandle: HTMLButtonElement;
+
     /**
      * Maps a level in the model to the node rendering it, so a re-sort can move
      * the existing nodes instead of rebuilding the scale. Weak so that removed
@@ -78,8 +95,12 @@ export class CriterionRow {
 
         this.hashField = el('input', { type: 'hidden', name: fields.hash, value: criterion.hash });
 
+        this.nameId = uniqueId('nt-rubric-name');
+        this.descriptionId = uniqueId('nt-rubric-description');
+
         this.nameField = el('input', {
             type: 'text',
+            id: this.nameId,
             class: 'input',
             name: fields.name,
             placeholder: 'Criteria name',
@@ -88,6 +109,7 @@ export class CriterionRow {
         this.nameField.addEventListener('input', () => this.callbacks.onNameInput(this.nameField.value));
 
         this.descriptionField = el('textarea', {
+            id: this.descriptionId,
             class: 'input',
             name: fields.description,
             placeholder: 'Criteria description'
@@ -101,6 +123,7 @@ export class CriterionRow {
         this.standardsContainer = el('div', { class: 'criteria-container--standards' });
         this.standardIdsField = el('input', { type: 'hidden', name: standardIdsField(prefix, index) });
         this.pointsReadout = el('span');
+        this.dragHandle = this.buildDragHandle();
 
         this.element = this.build();
 
@@ -114,9 +137,13 @@ export class CriterionRow {
         const content = el('div', { class: 'criteria-container--content' }, [
             el('div', { class: 'criteria-container--content-inner' }, [
                 el('div', { class: 'content-inner--name' }, [
+                    hiddenLabel(this.nameId, 'Criteria name'),
                     el('div', { class: 'inputGroup inputGroup--joined' }, [this.nameField, removeButton])
                 ]),
-                el('div', { class: 'content-inner--description' }, [this.descriptionField])
+                el('div', { class: 'content-inner--description' }, [
+                    hiddenLabel(this.descriptionId, 'Criteria description'),
+                    this.descriptionField
+                ])
             ])
         ]);
 
@@ -126,12 +153,50 @@ export class CriterionRow {
             this.standardsContainer
         ]);
 
-        return el('div', { class: 'criteria-container' }, [
+        return el('div', { class: 'criteria-container', role: 'listitem' }, [
             this.hashField,
-            el('div', { class: DRAG_HANDLE_CLASS }, [html(this.host.icon('regular', 'fa-ellipsis-v'))]),
+            this.dragHandle,
             content,
             level,
-            el('div', { class: 'criteria-container--points' }, [this.pointsReadout])
+            this.buildPoints()
+        ]);
+    }
+
+    /**
+     * The reorder grip.
+     *
+     * A `<button>` rather than the decorative `<span>` it used to be: dragging
+     * is a pointer-only gesture, so without a focusable control with keyboard
+     * handlers there is no way to reorder a rubric without a mouse. SortableJS
+     * still drives pointer drags from the same element.
+     */
+    private buildDragHandle(): HTMLButtonElement {
+        const handle = el('button', {
+            type: 'button',
+            class: DRAG_HANDLE_CLASS,
+            'aria-label': 'Reorder criteria. Use the arrow keys to move this criteria up or down.'
+        });
+        handle.append(hostMarkup(this.host.icon('regular', 'fa-ellipsis-v')));
+
+        handle.addEventListener('keydown', (event: KeyboardEvent) => {
+            const intent = KEY_MOVES[event.key];
+            if (!intent) {
+                return;
+            }
+
+            // Otherwise the arrow keys scroll the page out from under the row
+            // that is being moved.
+            event.preventDefault();
+            this.callbacks.onMove(intent);
+        });
+
+        return handle;
+    }
+
+    private buildPoints(): HTMLElement {
+        return el('div', { class: 'criteria-container--points' }, [
+            el('span', { class: VISUALLY_HIDDEN_CLASS }, ['Maximum points: ']),
+            this.pointsReadout
         ]);
     }
 
@@ -147,9 +212,13 @@ export class CriterionRow {
                 type: 'button',
                 class: 'button button--link',
                 title,
+                // These buttons have no text, only an icon whose markup comes
+                // from the host — so `title` alone is not a reliable accessible
+                // name. `aria-label` is.
+                'aria-label': title,
                 ...this.host.tooltipAttributes()
             },
-            [html(this.host.icon('regular', icon))]
+            [hostMarkup(this.host.icon('regular', icon))]
         );
         button.addEventListener('click', onClick);
 
@@ -168,7 +237,7 @@ export class CriterionRow {
 
         if (!this.criterion.levels.length) {
             this.levelsContainer.append(
-                el('div', { class: 'criteria-container--level-empty' }, [
+                el('div', { class: 'criteria-container--level-empty', role: 'status' }, [
                     'There are no grading scales for this criteria.',
                     el('br'),
                     'Please add one before saving this rubric.'
@@ -210,8 +279,16 @@ export class CriterionRow {
 
         const hash = el('input', { type: 'hidden', name: names.hash, value: level.hash });
 
+        const pointsId = uniqueId('nt-rubric-points');
+        const descriptionId = uniqueId('nt-rubric-level-description');
+
+        // Deliberately type="text" with inputmode, not type="number". A number
+        // input rejects the half-typed states this editor tolerates ('-', '1.')
+        // and throws on selectionStart, which preserveFocus depends on.
         const points = el('input', {
             type: 'text',
+            id: pointsId,
+            inputmode: 'decimal',
             class: 'input',
             name: names.points,
             placeholder: 'Point value',
@@ -220,6 +297,7 @@ export class CriterionRow {
         points.addEventListener('input', () => this.callbacks.onLevelPointsInput(levelIndex(), points.value));
 
         const description = el('textarea', {
+            id: descriptionId,
             class: 'input',
             name: names.description,
             placeholder: 'Scale description'
@@ -236,9 +314,13 @@ export class CriterionRow {
         return el('div', { class: 'criteria-container--level-item' }, [
             hash,
             el('div', { class: 'level-inner--points' }, [
+                hiddenLabel(pointsId, 'Point value'),
                 el('div', { class: 'inputGroup inputGroup--joined' }, [points, remove])
             ]),
-            el('div', { class: 'level-inner--description' }, [description])
+            el('div', { class: 'level-inner--description' }, [
+                hiddenLabel(descriptionId, 'Scale description'),
+                description
+            ])
         ]);
     }
 
@@ -249,7 +331,7 @@ export class CriterionRow {
         this.standardIdsField.value = this.criterion.standards.map((standard) => standard.standardId).join(',');
 
         const addButton = el('button', { type: 'button', class: 'btnAddStandards button button--link button--small' }, [
-            html(this.host.icon('regular', 'fa-plus')),
+            hostMarkup(this.host.icon('regular', 'fa-plus')),
             ' Add standard'
         ]);
         addButton.addEventListener('click', () => this.callbacks.onAddStandard());
@@ -269,23 +351,31 @@ export class CriterionRow {
     private buildStandard(standard: Standard): HTMLElement {
         const tooltipId = standardTooltipId(this.prefix, this.index, standard.standardId);
 
+        // aria-describedby, not just the host's tooltip hook: a tooltip that
+        // only opens on hover leaves the description unreachable by keyboard and
+        // unannounced by a screen reader. This exposes it either way, and works
+        // even when no host tooltip library is present at all.
         const number = el(
             'div',
             {
                 class: 'enhanced-number',
+                'aria-describedby': tooltipId,
                 ...this.host.elementTooltipAttributes(tooltipId)
             },
             [el('b', {}, [standard.standardNumberEnhanced])]
         );
 
-        // Standard descriptions are authored in the host's standards library and
-        // may carry markup, so they are rendered as HTML — as they always have
-        // been. See SECURITY.md.
-        const tooltip = el('div', { id: tooltipId, class: 'is-hidden' }, [
-            html(standard.standardDescription, 'align--left')
-        ]);
+        // Descriptions are authored in the host's standards library and may
+        // carry formatting, so a bare string is parsed as HTML — the historical
+        // behaviour. A host that implements renderStandardDescription can return
+        // a Node (or plain text) instead, and nothing is parsed. See SECURITY.md.
+        const description = this.host.renderStandardDescription
+            ? this.host.renderStandardDescription(standard.standardDescription)
+            : standard.standardDescription;
 
-        const remove = this.iconButton('fa-trash', 'Remove standard', () =>
+        const tooltip = el('div', { id: tooltipId, class: 'is-hidden' }, [hostMarkup(description, 'align--left')]);
+
+        const remove = this.iconButton('fa-trash', `Remove standard ${standard.standardNumberEnhanced}`, () =>
             this.callbacks.onRemoveStandard(standard.standardId)
         );
 
@@ -297,5 +387,13 @@ export class CriterionRow {
     /** Updates just the point readout. Safe to call on every keystroke. */
     updatePoints(points: number): void {
         this.pointsReadout.textContent = String(points);
+    }
+
+    /**
+     * Puts focus back on the grip after a keyboard reorder rebuilt the rows.
+     * Without it, one arrow press would move the row and then lose focus.
+     */
+    focusDragHandle(): void {
+        this.dragHandle.focus();
     }
 }

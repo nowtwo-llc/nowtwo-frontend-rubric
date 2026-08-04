@@ -107,9 +107,40 @@
         }
     }
 
+    /*
+     * Parses each icon once into a real element and hands back that node. The
+     * editor clones it per use, so caching here is safe — and because it is a
+     * Node rather than a string, nothing is ever HTML-parsed at render time.
+     */
+    var iconCache = {};
+
+    function iconNode(name) {
+        if (!ICONS[name]) {
+            return '';
+        }
+
+        if (!iconCache[name]) {
+            var wrapper = document.createElement('span');
+            wrapper.innerHTML = ICONS[name];
+            iconCache[name] = wrapper.firstChild;
+        }
+
+        return iconCache[name];
+    }
+
     window.RubricHost = {
         icon: function (style, icon) {
-            return ICONS[icon] || '';
+            return iconNode(icon);
+        },
+
+        /*
+         * Standard descriptions in this demo are plain text, so they are handed
+         * over as a text node — the editor then cannot parse them as markup.
+         * Drop this method to get the default, which parses the string as HTML
+         * so authored formatting survives.
+         */
+        renderStandardDescription: function (description) {
+            return document.createTextNode(description);
         },
 
         // The editor already sets `title` on its controls, and this page is

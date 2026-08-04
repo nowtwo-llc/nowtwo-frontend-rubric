@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clear, el, html, preserveFocus } from '../../src/dom/element';
+import { clear, el, hostMarkup, preserveFocus } from '../../src/dom/element';
 
 describe('el', () => {
     it('creates an element with attributes', () => {
@@ -36,13 +36,49 @@ describe('el', () => {
     });
 });
 
-describe('html', () => {
-    it('parses markup', () => {
-        expect(html('<i class="fa"></i>').querySelector('i')).to.not.equal(null);
+describe('hostMarkup', () => {
+    it('parses a string as markup', () => {
+        expect(hostMarkup('<i class="fa"></i>').querySelector('i')).to.not.equal(null);
     });
 
     it('applies an optional class name', () => {
-        expect(html('x', 'align--left').className).to.equal('align--left');
+        expect(hostMarkup('x', 'align--left').className).to.equal('align--left');
+    });
+
+    it('uses a Node without parsing anything', () => {
+        const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        const wrapper = hostMarkup(icon);
+
+        expect(wrapper.firstChild?.nodeName.toLowerCase()).to.equal('svg');
+    });
+
+    it('does not HTML-parse text handed over as a Node', () => {
+        // The point of the Node form: a host can hand over untrusted text with
+        // no possibility of it becoming markup.
+        const text = document.createTextNode('<img src=x onerror=alert(1)>');
+
+        expect(hostMarkup(text).querySelector('img')).to.equal(null);
+        expect(hostMarkup(text).textContent).to.equal('<img src=x onerror=alert(1)>');
+    });
+
+    it('clones the node so one cached icon can be used on many controls', () => {
+        // A host that builds its icon once and returns the same element would
+        // otherwise have it moved from control to control by append().
+        const icon = document.createElement('i');
+        const first = hostMarkup(icon);
+        const second = hostMarkup(icon);
+
+        expect(first.firstChild).to.not.equal(null);
+        expect(second.firstChild).to.not.equal(null);
+        expect(first.firstChild).to.not.equal(second.firstChild);
+        expect(icon.isConnected).to.equal(false);
+    });
+
+    it('clones deeply', () => {
+        const icon = document.createElement('span');
+        icon.append(document.createElement('b'));
+
+        expect(hostMarkup(icon).querySelector('b')).to.not.equal(null);
     });
 });
 

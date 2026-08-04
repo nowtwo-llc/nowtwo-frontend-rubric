@@ -53,8 +53,24 @@ export interface OverlayDisplayOptions {
  * `host/globalHost.ts`.
  */
 export interface HostBridge {
-    /** Returns icon markup. The result is inserted as HTML, so it must be trusted. */
-    icon(style: string, name: string): string;
+    /**
+     * Returns an icon.
+     *
+     * Return a `Node` to avoid HTML parsing altogether — it is cloned and
+     * inserted as-is. A returned **string is parsed as HTML** and must
+     * therefore be trusted. Prefer the node form where you can.
+     */
+    icon(style: string, name: string): string | Node;
+    /**
+     * Renders a standard's description, which comes from the host's standards
+     * library and may carry authored formatting.
+     *
+     * Omit it and the description is parsed as HTML, which is the historical
+     * behaviour. Implement it to take control: return a `Node` you built or
+     * sanitised, or a plain string of text, and nothing is HTML-parsed. Worth
+     * doing if any part of your standards library is user-supplied.
+     */
+    renderStandardDescription?(description: string): string | Node;
     /**
      * Extra attributes for a control that already carries a `title`, letting the
      * host upgrade it from a native tooltip to a styled one. Return `{}` to keep
@@ -98,6 +114,50 @@ export interface RubricEditorOptions {
      * Ignored when `host` is supplied directly.
      */
     hostGlobal?: string;
+    /**
+     * Called after every change to the rubric, including individual keystrokes
+     * in a name, description or point field.
+     *
+     * This is how a host marks its form dirty, warns on unsaved navigation or
+     * live-validates. It is deliberately chatty rather than debounced: only the
+     * host knows what an appropriate settling delay is for its own UI.
+     */
+    onChange?: (criteria: Criterion[], editor: RubricEditorLike) => void;
+}
+
+/**
+ * The part of the editor handed to `onChange`. Typed structurally so `types.ts`
+ * stays free of an import cycle back to `RubricEditor.ts`.
+ */
+export interface RubricEditorLike {
+    readonly criteria: Criterion[];
+    readonly totalPoints: number;
+    validate(): ValidationResult;
+}
+
+export type ProblemCode =
+    /** The rubric has no criteria at all. */
+    | 'empty-rubric'
+    /** A criterion has no grading levels, so it can never be scored. */
+    | 'criterion-without-levels'
+    /** A criterion has no name. */
+    | 'criterion-without-name'
+    /** A level's point value is not a number. */
+    | 'level-points-not-numeric';
+
+export interface ValidationProblem {
+    code: ProblemCode;
+    /** Human-readable, safe to show to the person editing the rubric. */
+    message: string;
+    /** Index of the criterion at fault, when the problem is scoped to one. */
+    criterionIndex?: number;
+    /** Index of the level at fault, when the problem is scoped to one. */
+    levelIndex?: number;
+}
+
+export interface ValidationResult {
+    valid: boolean;
+    problems: ValidationProblem[];
 }
 
 declare global {

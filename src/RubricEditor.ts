@@ -1,11 +1,12 @@
-import { CriterionRow } from './dom/CriterionRow';
+import { CriterionRow, type MoveIntent } from './dom/CriterionRow';
 import { el } from './dom/element';
 import { buildEmptyState, buildFooter, buildHeader, type Footer } from './dom/layout';
 import { createGlobalHost } from './host/globalHost';
 import { bindStandardsEvents, DEFAULT_STANDARDS_EVENTS } from './host/standardsEvents';
 import { RubricState, type RubricChange } from './model/RubricState';
+import { validateRubric } from './model/validate';
 import { bindReorder, type ReorderBinding } from './sortable/reorder';
-import type { Criterion, HostBridge, RubricEditorOptions, Standard } from './types';
+import type { Criterion, HostBridge, RubricEditorOptions, Standard, ValidationResult } from './types';
 
 export type {
     Criterion,
@@ -14,14 +15,20 @@ export type {
     OverlayDisplayOptions,
     OverlayRequestOptions,
     PointValue,
+    ProblemCode,
     RubricEditorOptions,
-    Standard
+    Standard,
+    ValidationProblem,
+    ValidationResult
 } from './types';
 
 export const DEFAULT_CONTAINER = '#nt-rubric-app';
 export const DEFAULT_STANDARDS_URL = '/standards/select';
 export const DEFAULT_FIELD_PREFIX = 'criteria';
 export const ROOT_CLASS = 'nt-rubric';
+
+/** Dispatched on the editor's root element after every change. */
+export const CHANGE_EVENT = 'nt-rubric:change';
 
 /**
  * A rubric editor.
@@ -87,6 +94,17 @@ export class RubricEditor {
         return this.state.total();
     }
 
+    /**
+     * Reports the problems that would make this rubric unusable once saved.
+     *
+     * The editor never blocks these itself — half-finished state is normal while
+     * someone is still working. Call this before submitting and decide what to
+     * do with the result.
+     */
+    validate(): ValidationResult {
+        return validateRubric(this.state.all());
+    }
+
     mount(): this {
         if (this.root) {
             return this;
@@ -95,7 +113,10 @@ export class RubricEditor {
         this.container = this.resolveContainer();
         this.root = el('div', { class: ROOT_CLASS });
 
-        this.list = el('div', { class: 'criteria-list' });
+        // role=list pairs with role=listitem on each row, so assistive tech
+        // reports how many criteria there are and which one you are on. The
+        // rows are flex divs, so the semantics have to be stated explicitly.
+        this.list = el('div', { class: 'criteria-list', role: 'list', 'aria-label': 'Rubric criteria' });
         this.footer = buildFooter(this.host, () => this.state.addCriterion());
 
         this.root.append(buildHeader(), this.list, this.footer.element);
@@ -184,9 +205,33 @@ export class RubricEditor {
             case 'points':
                 this.refreshPoints();
                 break;
+            case 'text':
+                // Renders nothing: the field already shows what was typed.
+                break;
             default:
                 break;
         }
+
+        this.notifyChange();
+    }
+
+    /**
+     * Tells the host something changed, both ways: the `onChange` option for
+     * module consumers and a DOM event for `<script>`-tag pages that never see
+     * the instance.
+     *
+     * Fires on every keystroke. Debouncing belongs to the host, which is the
+     * only side that knows what its own UI needs.
+     */
+    private notifyChange(): void {
+        this.options.onChange?.(this.state.all(), this);
+
+        this.root?.dispatchEvent(
+            new CustomEvent(CHANGE_EVENT, {
+                bubbles: true,
+                detail: { criteria: this.state.all(), totalPoints: this.state.total() }
+            })
+        );
     }
 
     private renderList(): void {
@@ -221,6 +266,7 @@ export class RubricEditor {
                         this.state.setLevelPoints(this.indexOf(row), levelIndex, value),
                     onLevelDescriptionInput: (levelIndex, value) =>
                         this.state.setLevelDescription(this.indexOf(row), levelIndex, value),
+                    onMove: (intent) => this.moveByIntent(this.indexOf(row), intent),
                     onAddStandard: () => this.openStandardsPicker(this.indexOf(row)),
                     onRemoveStandard: (standardId) => this.removeStandard(this.indexOf(row), standardId)
                 }
@@ -297,5 +343,39 @@ export class RubricEditor {
      */
     moveCriterion(from: number, to: number): void {
         this.state.moveCriterion(from, to);
+    }
+
+    /**
+     * Keyboard reordering from the row's grip.
+     *
+     * Moving a criterion rebuilds every row, which destroys the button that was
+     * focused — so focus is deliberately restored to the grip of the row in its
+     * *new* position. Without that, one arrow press would drop focus to the
+     * document and reordering by keyboard would be a single-step operation.
+     */
+    private moveByIntent(from: number, intent: MoveIntent): void {
+        if (from < 0) {
+            return;
+        }
+
+        const last = this.state.count() - 1;
+        const targets: Record<MoveIntent, number> = {
+            up: from - 1,
+            down: from + 1,
+            first: 0,
+            last
+        };
+
+        const to = Math.min(Math.max(targets[intent], 0), last);
+        if (to === from) {
+            return;
+        }
+
+        this.moveCriterion(from, to);
+        this.focusHandle(to);
+    }
+
+    private focusHandle(index: number): void {
+        this.rows[index]?.focusDragHandle();
     }
 }

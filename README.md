@@ -63,6 +63,7 @@ force.
 | `removeStandardEvent` | `'HE:StandardsTool:RemoveStandard'` | Event the host dispatches when a standard is cleared. |
 | `host` | Bridge backed by `hostGlobal` | Host integration — see below. |
 | `hostGlobal` | `'RubricHost'` | Name of the global carrying the host bridge. Ignored when `host` is passed. |
+| `onChange` | — | Called after every edit, including individual keystrokes. |
 
 ## API
 
@@ -72,8 +73,71 @@ force.
 | `destroy()` | Removes the DOM and every listener, including the `document` ones. |
 | `criteria` | The live rubric array. |
 | `totalPoints` | Sum of every criterion's best level. |
+| `validate()` | `{ valid, problems }` — see below. |
 | `moveCriterion(from, to)` | Reorders a criterion, as a completed drag does. |
 | `addStandard(index, standard)` | Aligns a standard, as the picker's select event does. |
+
+## Reacting to edits
+
+Pass `onChange`, or listen for the `nt-rubric:change` event on the container — the event exists
+so `<script>`-tag pages that never hold the instance get the same news.
+
+```ts
+new RubricEditor({
+    container: '#nt-rubric-app',
+    onChange: (criteria, editor) => {
+        form.dataset.dirty = 'true';
+        saveButton.disabled = !editor.validate().valid;
+    }
+}).mount();
+```
+
+```js
+document.querySelector('#nt-rubric-app').addEventListener('nt-rubric:change', (event) => {
+    console.log(event.detail.criteria, event.detail.totalPoints);
+});
+```
+
+Both fire on **every keystroke**, and neither fires on mount. Debouncing is left to you, since
+only the host knows what settling delay its own UI wants.
+
+## Validation
+
+The editor never blocks input — half-finished state is normal while someone is still working,
+and a control that refuses input is worse than one that reports. Call `validate()` before
+submitting and decide what to do:
+
+```ts
+const { valid, problems } = editor.validate();
+if (!valid) {
+    problems.forEach((p) => console.warn(p.code, p.message, p.criterionIndex));
+}
+```
+
+| `code` | Meaning |
+| --- | --- |
+| `empty-rubric` | No criteria at all |
+| `criterion-without-name` | A criterion has a blank name |
+| `criterion-without-levels` | A criterion has no grading scale, so it can never be scored |
+| `level-points-not-numeric` | A point value would silently save as zero |
+
+Problems carry `criterionIndex` and, where relevant, `levelIndex`, so you can point at the row
+at fault.
+
+## Accessibility
+
+- Every input has a real `<label>`, visually hidden to fit the dense row layout. Placeholders
+  are not relied on as names.
+- Icon-only buttons carry `aria-label`, and remove-standard buttons name the standard.
+- Criteria expose `role="list"` / `role="listitem"`; the running total is an `aria-live`
+  region; both empty states are `role="status"`.
+- **Reordering works without a mouse.** The grip is a real button: focus it and use
+  <kbd>↑</kbd>/<kbd>↓</kbd> to move a criterion, <kbd>Home</kbd>/<kbd>End</kbd> to send it to
+  either end. Focus follows the row so you can keep going. Pointer dragging still works.
+- Standard chips use `aria-describedby`, so the description reaches a screen reader even when
+  no host tooltip library is present.
+- Point fields are `type="text"` with `inputmode="decimal"` — deliberately not `type="number"`,
+  which rejects half-typed values and breaks caret preservation.
 
 ## Form fields
 
@@ -100,14 +164,24 @@ Everything page-specific goes through a single `HostBridge`:
 
 ```ts
 interface HostBridge {
-    icon(style: string, name: string): string;
+    icon(style: string, name: string): string | Node;
     tooltipAttributes(): Record<string, string>;
     elementTooltipAttributes(targetId: string): Record<string, string>;
     activate(root: HTMLElement): void;
     loadOverlay(url: string, request: OverlayRequestOptions, display: OverlayDisplayOptions): void;
     hideTooltips(): void;
+    renderStandardDescription?(description: string): string | Node;
 }
 ```
+
+`icon()` may return a **`Node`** rather than a string, in which case nothing is HTML-parsed —
+the node is cloned per use, so one cached icon element works across every control. Strings are
+parsed as HTML and must be trusted.
+
+Standard descriptions are parsed as HTML by default so authored formatting survives. If any
+part of your standards library can contain untrusted text, implement
+`renderStandardDescription` and return a `Node` or plain text instead. See
+[SECURITY.md](SECURITY.md).
 
 Pass one as the `host` option, or — for the `<script>` build, where you may not want to write
 module code — define a global of the same shape and the editor will find it:

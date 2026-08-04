@@ -67,9 +67,16 @@ routes each to the narrowest render that covers it:
 | `order` | Move one row's existing level nodes (`syncLevelOrder`) |
 | `standards` | One row's standards strip (`renderStandards`) |
 | `points` | Point readouts only |
+| `text` | **Nothing** |
 
-Text edits (name, description, level description) report **nothing** — the DOM already shows
-what was typed, so re-rendering would only move the caret.
+Text edits (name, description, level description) report `text`, which renders nothing — the
+DOM already shows what was typed, so re-rendering would only move the caret. They are still
+*reported* so that `onChange` hears every edit; that is the whole reason the case exists
+rather than the setters staying silent.
+
+`apply()` calls `notifyChange()` for every change type, which fans out to the `onChange`
+option and a bubbling `nt-rubric:change` DOM event. Never debounce it here — only the host
+knows what settling delay its UI wants.
 
 The scale re-sorts on every keystroke in a point field. That is longstanding product
 behaviour, deliberately preserved. It is safe here because `syncLevelOrder` *moves the
@@ -90,6 +97,42 @@ application framework behind it, so keep it working.
 **This includes markup hooks.** Attributes that only mean something to a particular host's
 JavaScript must come from `tooltipAttributes()` / `elementTooltipAttributes()`, never be
 hardcoded in `CriterionRow`. A `title` is fine — that is native HTML and works everywhere.
+
+### 4. Accessibility is behaviour, not polish
+
+This is a form used in education, where conformance is routinely a procurement requirement.
+`tests/unit/accessibility.spec.ts` asserts every visible control has an accessible name and
+that reordering works from the keyboard; treat a failure there as a broken feature.
+
+Things that look like details and are not:
+
+- **Labels are real `<label for>` elements**, visually hidden via `.nt-rubric-sr-only`
+  (`clip-path`, not `display: none` — the latter removes them from the accessibility tree
+  too). Ids come from `uniqueId()` because two editors can share a page.
+- **Point fields are `type="text"` + `inputmode="decimal"`.** Never `type="number"`: it
+  rejects the half-typed values this editor tolerates (`-`, `1.`) and *throws* on
+  `selectionStart`, which `preserveFocus` depends on.
+- **The drag grip is a `<button>` with arrow-key handlers.** Dragging is pointer-only, so
+  without it a rubric cannot be reordered without a mouse. A keyboard move rebuilds every row
+  and destroys the focused button, so `moveByIntent` deliberately re-focuses the grip at the
+  row's new index — drop that and reordering becomes a one-step operation.
+- **Standard chips carry `aria-describedby`** as well as the host's tooltip hook, so the
+  description is reachable when no tooltip library is present.
+
+### 5. Only two values may ever be HTML-parsed
+
+`hostMarkup()` in `dom/element.ts` is the **single** place anything becomes markup, and only
+host-supplied values reach it: icon markup and a standard's description. Everything the person
+editing the rubric types is written with `value` or `textContent` and can never be parsed.
+
+Both accept a `Node` as well as a string — `icon()` directly, and the description via the
+optional `renderStandardDescription()` — and a `Node` is used as-is, so a host can opt out of
+HTML parsing entirely. Nodes are **cloned** on insertion: a host that builds its icon once and
+returns the same element would otherwise have `append` move that single element from one
+control to the next, leaving only the last one rendered.
+
+Do not add a second `innerHTML` anywhere. If something needs host-supplied markup, route it
+through `hostMarkup` so the surface stays enumerable — SECURITY.md documents exactly these two.
 
 `createGlobalHost` resolves the global on **every call** rather than capturing it once. The
 bundle is routinely loaded before the host page finishes wiring itself up, so a reference
@@ -113,10 +156,11 @@ src/
     RubricState.ts       Owns the criteria array and every mutation to it.
     points.ts            toPoints / maxPoints / totalPoints / sortLevels / nextLevelPoints.
     factories.ts         New criterion and level shapes.
+    validate.ts          Reports problems; never blocks input.
   dom/
     CriterionRow.ts      One row, built once and patched.
     fieldNames.ts        The form contract.
-    element.ts           el() / html() / clear() / preserveFocus().
+    element.ts           el() / hostMarkup() / clear() / preserveFocus() / uniqueId().
     layout.ts            Header, footer, empty state.
   host/
     globalHost.ts        The only file that reads a host global.

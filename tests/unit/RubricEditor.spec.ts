@@ -141,10 +141,16 @@ describe('RubricEditor', () => {
         it('shows each criterion max in its own row', () => {
             mount(createCriteriaList(2));
             const readouts = Array.from(container.querySelectorAll('.criteria-container--points')).map(
-                (node) => node.textContent
+                (node) => node.querySelector('span:not(.nt-rubric-sr-only)')?.textContent
             );
 
             expect(readouts).to.deep.equal(['3', '6']);
+        });
+
+        it('gives the bare points number a hidden label so it is not announced alone', () => {
+            mount(createCriteriaList(1));
+
+            expect(container.querySelector('.criteria-container--points')?.textContent).to.equal('Maximum points: 3');
         });
 
         it('renders existing values into the inputs', () => {
@@ -255,7 +261,9 @@ describe('RubricEditor', () => {
             mount([createCriterion({ levels: [{ hash: 'a', points: 3, description: '' }] })]);
             type(fields('criteria_0_level_points[]')[0], '12');
 
-            expect(container.querySelector('.criteria-container--points')?.textContent).to.equal('12');
+            expect(
+                container.querySelector('.criteria-container--points span:not(.nt-rubric-sr-only)')?.textContent
+            ).to.equal('12');
             expect(container.querySelector('.rubric-footer-container')?.textContent).to.contain(
                 'Total Possible Points: 12'
             );
@@ -447,6 +455,35 @@ describe('RubricEditor', () => {
             expect(host.hideTooltips).toHaveBeenCalledOnce();
         });
 
+        it('parses a string description as HTML, preserving authored formatting', () => {
+            mount([
+                createCriterion({
+                    standards: [createStandard({ standardDescription: 'Write <b>arguments</b>' })]
+                })
+            ]);
+
+            expect(container.querySelector('#criteria-0-standard-1-tooltip b')?.textContent).to.equal('arguments');
+        });
+
+        it('lets a host render the description as a Node so nothing is HTML-parsed', () => {
+            const safe = createMockHost();
+            safe.renderStandardDescription = (description: string) => document.createTextNode(description);
+
+            editor = new RubricEditor({
+                container,
+                host: safe,
+                criteria: [
+                    createCriterion({
+                        standards: [createStandard({ standardDescription: '<img src=x onerror=alert(1)>' })]
+                    })
+                ]
+            }).mount();
+
+            const tooltip = container.querySelector('#criteria-0-standard-1-tooltip')!;
+            expect(tooltip.querySelector('img')).to.equal(null);
+            expect(tooltip.textContent).to.equal('<img src=x onerror=alert(1)>');
+        });
+
         it('renders a hidden description node scoped to the criterion and standard', () => {
             mount([createCriterion({ standards: [createStandard({ standardId: 8 })] })]);
             const tooltip = container.querySelector('#criteria-0-standard-8-tooltip');
@@ -592,6 +629,21 @@ describe('RubricEditor', () => {
             expect(activate).toHaveBeenCalled();
 
             delete (globalThis as Record<string, unknown>).MyHost;
+        });
+
+        it('accepts a Node from the host icon helper', () => {
+            const nodeHost = createMockHost();
+            nodeHost.icon = () => {
+                const svg = document.createElement('svg');
+                svg.setAttribute('data-icon', 'true');
+
+                return svg;
+            };
+
+            editor = new RubricEditor({ container, host: nodeHost, criteria: createCriteriaList(2) }).mount();
+
+            // Cloned per call, so one cached node still renders on every control.
+            expect(container.querySelectorAll('[data-icon]').length).to.be.greaterThan(2);
         });
 
         it('applies host tooltip attributes to the standard chips', () => {

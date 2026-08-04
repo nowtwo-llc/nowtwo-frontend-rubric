@@ -28,18 +28,22 @@ The things most worth reporting:
   descriptions and point values — never become markup. They are written with `value` and
   `textContent`, so they cannot be parsed as HTML.
 
-  Two values *are* inserted as HTML, both host-supplied and both deliberate:
+  Exactly two values can be parsed as HTML, both host-supplied, and **both have a way to opt
+  out**:
 
-  | Value | Source |
-  | --- | --- |
-  | Icon markup | `HostBridge.icon()`, supplied by the host page |
-  | `standardDescription` | The host's standards library, rendered as HTML so authored formatting survives |
+  | Value | Source | Avoiding HTML parsing |
+  | --- | --- | --- |
+  | Icon markup | `HostBridge.icon()` | Return a `Node` instead of a string — it is cloned and inserted as-is |
+  | `standardDescription` | The host's standards library | Implement `HostBridge.renderStandardDescription()` and return a `Node` or plain text |
 
-  Both are trusted by design: they come from the host application, not from the person using
-  the editor, and this matches how the component has always rendered them. If your standards
-  library can contain text an untrusted user controls, sanitise it before handing it to the
-  editor. If you find any path that turns *editor* input into parsed markup or executed
-  script, that is a vulnerability and we want to hear about it.
+  The string forms are trusted by design: they come from the host application, not from the
+  person using the editor, and parsing them preserves authored formatting. **If any part of
+  your standards library can contain text an untrusted user controls, use
+  `renderStandardDescription` to return a sanitised `Node` or plain text** — or sanitise
+  before handing the data to the editor.
+
+  If you find any path that turns *editor* input into parsed markup or executed script, that
+  is a vulnerability and we want to hear about it.
 
 - **Form field names.** The editor's inputs post through the host's form under the names
   documented in `src/dom/fieldNames.ts`. A bug that makes a criterion's levels or standards

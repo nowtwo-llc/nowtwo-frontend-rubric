@@ -59,10 +59,42 @@
 
         editor = new RubricEditor({
             container: '#nt-rubric-app',
-            criteria: criteria
+            criteria: criteria,
+            // Fires on every keystroke, so the status line and the validity
+            // readout stay current without the page polling anything.
+            onChange: function (_criteria, instance) {
+                report(instance);
+            }
         }).mount();
 
-        setStatus('Total possible points: ' + editor.totalPoints);
+        report(editor);
+    }
+
+    /*
+     * The editor never blocks input — it reports. This is the shape of what a
+     * host does with that: show the running total, and surface what would stop
+     * the rubric being saved.
+     */
+    function report(instance) {
+        var result = instance.validate();
+
+        setStatus('Total possible points: ' + instance.totalPoints);
+
+        var problems = document.getElementById('problems');
+        problems.replaceChildren();
+
+        if (result.valid) {
+            problems.textContent = 'No problems — this rubric is ready to save.';
+            problems.className = 'nt-note is-valid';
+            return;
+        }
+
+        problems.className = 'nt-note is-invalid';
+        result.problems.forEach(function (problem) {
+            var item = document.createElement('div');
+            item.textContent = problem.message;
+            problems.append(item);
+        });
     }
 
     /*
@@ -99,16 +131,6 @@
         });
 
         document.getElementById('show-payload').addEventListener('click', showPayload);
-
-        // Any edit can change the totals, and the editor keeps its own readouts
-        // current — this just mirrors the total into the status line.
-        document.getElementById('nt-rubric-app').addEventListener('input', function () {
-            setStatus('Total possible points: ' + editor.totalPoints);
-        });
-
-        document.getElementById('nt-rubric-app').addEventListener('click', function () {
-            setStatus('Total possible points: ' + editor.totalPoints);
-        });
 
         document.getElementById('close-picker').addEventListener('click', function () {
             document.getElementById('standards-picker').close();

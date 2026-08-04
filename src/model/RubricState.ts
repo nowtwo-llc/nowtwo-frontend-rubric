@@ -15,13 +15,18 @@ import { maxPoints, nextLevelPoints, sortLevels, totalPoints } from './points';
  * - `order`     — one criterion's levels changed position but not membership.
  * - `standards` — one criterion's standards changed.
  * - `points`    — values only; nothing structural moved.
+ * - `text`      — a name or description was typed into. Renders nothing at all:
+ *                 the DOM already shows what was typed, and re-rendering would
+ *                 move the caret. It is still reported so that hosts listening
+ *                 via `onChange` hear about every edit, not just structural ones.
  */
 export type RubricChange =
     | { type: 'list' }
     | { type: 'levels'; index: number }
     | { type: 'order'; index: number }
     | { type: 'standards'; index: number }
-    | { type: 'points' };
+    | { type: 'points' }
+    | { type: 'text' };
 
 export type RubricListener = (change: RubricChange) => void;
 
@@ -110,6 +115,7 @@ export class RubricState {
         const criterion = this.at(index);
         if (criterion) {
             criterion.name = name;
+            this.emit({ type: 'text' });
         }
     }
 
@@ -117,6 +123,7 @@ export class RubricState {
         const criterion = this.at(index);
         if (criterion) {
             criterion.description = description;
+            this.emit({ type: 'text' });
         }
     }
 
@@ -170,6 +177,7 @@ export class RubricState {
         const level = this.at(index)?.levels[levelIndex];
         if (level) {
             level.description = description;
+            this.emit({ type: 'text' });
         }
     }
 

@@ -34,8 +34,19 @@ function resolve(globalName: string): PartialHost | undefined {
  */
 export function createGlobalHost(globalName: string = DEFAULT_HOST_GLOBAL): HostBridge {
     return {
-        icon(style: string, name: string): string {
+        icon(style: string, name: string): string | Node {
             return resolve(globalName)?.icon?.(style, name) ?? '';
+        },
+
+        /**
+         * Returning the description untouched when the global does not implement
+         * this is exactly the default: a string flows on to be parsed as HTML,
+         * which is the historical behaviour.
+         */
+        renderStandardDescription(description: string): string | Node {
+            const render = resolve(globalName)?.renderStandardDescription;
+
+            return render ? render(description) : description;
         },
 
         tooltipAttributes(): Record<string, string> {

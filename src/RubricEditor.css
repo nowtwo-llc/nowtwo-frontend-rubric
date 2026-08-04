@@ -9,6 +9,23 @@
  * Selectors are flat rather than nested so the file needs no preprocessor.
  */
 
+/*
+ * Available to screen readers, absent from the page. `display: none` would
+ * remove it from the accessibility tree too, which is the opposite of what the
+ * labels need.
+ */
+.nt-rubric .nt-rubric-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    overflow: hidden;
+}
+
 .nt-rubric .criteria-container--empty,
 .nt-rubric .criteria-container--level-empty {
     display: flex;
@@ -39,12 +56,33 @@
     resize: none;
 }
 
+/*
+ * The grip is a <button> so it can be focused and driven by the arrow keys.
+ * That makes this reset part of the layout contract rather than theming: the
+ * library chose the element, so the library owes it the neutralising it needs
+ * to not render as a default browser button.
+ */
 .nt-rubric .criteria-container--drag-handle {
     display: flex;
     flex: 0 0 20px;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
     cursor: grab;
+}
+
+/*
+ * A visible focus indicator is the whole point of making it focusable, so it
+ * ships with the component rather than depending on the host to add one.
+ * Hosts can override it.
+ */
+.nt-rubric .criteria-container--drag-handle:focus-visible {
+    outline: 2px solid currentcolor;
+    outline-offset: -2px;
 }
 
 .nt-rubric .criteria-container--content {

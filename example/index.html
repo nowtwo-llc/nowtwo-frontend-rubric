@@ -157,6 +157,28 @@
                 max-height: 18rem;
                 overflow: auto;
             }
+
+            #problems.is-valid {
+                color: var(--nt-accent-text);
+            }
+
+            #problems.is-invalid {
+                color: #b4442c;
+            }
+
+            /* The grip is a real button now, so it needs a visible focus ring. */
+            .nt-host .criteria-container--drag-handle {
+                border: 0;
+                background: none;
+                color: var(--nt-muted);
+                cursor: grab;
+            }
+
+            .nt-host .criteria-container--drag-handle:focus-visible {
+                outline: 2px solid var(--nt-accent);
+                outline-offset: -2px;
+                border-radius: 4px;
+            }
         </style>
 
         <link rel="stylesheet" href="../dist/frontend-rubric.min.css" />
@@ -185,9 +207,11 @@
                 </div>
                 <p id="status" class="nt-status" role="status"></p>
                 <p class="nt-note">
-                    Drag a row by its grip to reorder it. Type in a point value and the scale re-sorts around it
+                    Drag a row by its grip to reorder it — or <strong>focus the grip and use the arrow keys</strong>,
+                    since reordering works without a mouse. Type in a point value and the scale re-sorts around it
                     without losing your place. "Add standard" opens a stand-in for the host's standards picker.
                 </p>
+                <div id="problems" class="nt-note" role="status"></div>
 
                 <!-- The editor renders into a container inside the host's form; the
                      host is what posts the fields. -->
