@@ -1,6 +1,6 @@
 {
     "name": "@nowtwo-llc/frontend-rubric",
-    "version": "9.0.0",
+    "version": "10.0.0",
     "description": "A dependency-light rubric editor for the browser: criteria, weighted grading scales, standards alignment and drag-to-reorder, rendered straight into a host form.",
     "keywords": [
         "rubric",
